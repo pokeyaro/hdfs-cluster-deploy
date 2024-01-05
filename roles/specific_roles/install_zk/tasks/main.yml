@@ -1,0 +1,107 @@
+- name: Extract tarball filename from URL
+  set_fact:
+    tarball_filename: "{{ tarball_url.split('/')[-1] }}"
+    temp_file: "/tmp/{{ tarball_url.split('/')[-1] }}"
+
+- name: Download Zookeeper tarball from URL
+  get_url:
+    url: "{{ tarball_url }}"
+    dest: "{{ temp_file }}"
+  become: yes
+  become_user: "{{ uname }}"
+
+- name: Extract directory name from downloaded tarball
+  shell: tar -tf {{ temp_file }} | head -1 | awk -F '/' '{print $1}'
+  register: zk_native_version
+  changed_when: false
+
+- name: Set facts for Zookeeper directories and config file
+  set_fact:
+    zk_app_dir: "{{ base_dir }}/{{ zk_native_version.stdout }}"
+    zk_data_dir: "{{ base_dir }}/{{ zk_native_version.stdout }}/data"
+    zk_data_log_dir: "{{ base_dir }}/{{ zk_native_version.stdout }}/data_log"
+    zk_conf_file: "{{ base_dir }}/{{ zk_native_version.stdout }}/conf/zoo.cfg"
+
+- name: Create Zookeeper base directory
+  file:
+    path: "{{ base_dir }}"
+    state: directory
+    owner: "{{ uid }}"
+    group: "{{ gid }}"
+    mode: '0755'
+
+- name: Uncompress Zookeeper tarball to the base directory
+  unarchive:
+    src: "{{ temp_file }}"
+    dest: "{{ base_dir }}"
+    remote_src: yes
+  become: yes
+  become_user: "{{ uname }}"
+
+- name: Create Zookeeper data directories and set permissions
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ uid }}"
+    group: "{{ gid }}"
+    mode: '0755'
+  loop:
+    - "{{ zk_data_dir }}"
+    - "{{ zk_data_log_dir }}"
+
+- name: Generate and upload Zookeeper configuration file
+  template:
+    src: zoo.cfg.j2
+    dest: "{{ zk_conf_file }}"
+  become: yes
+  become_user: "{{ uname }}"
+
+- name: Set appropriate permissions for Zookeeper configuration file
+  file:
+    path: "{{ zk_conf_file }}"
+    owner: "{{ uid }}"
+    group: "{{ gid }}"
+    mode: '0644'
+
+- name: Create and write node identifier to 'myid' file
+  copy:
+    dest: "{{ zk_data_dir }}/myid"
+    content: "{{ groups[target_hosts].index(inventory_hostname) + 1 }}"
+    owner: "{{ uid }}"
+    group: "{{ gid }}"
+    mode: '0644'
+
+- name: Cleanup downloaded Zookeeper tarball
+  file:
+    path: "{{ temp_file }}"
+    state: absent
+
+- name: Update ~/.bashrc to include ZOOKEEPER environment variables
+  blockinfile:
+    path: ~/.bashrc
+    block: |
+      export ZOOKEEPER_HOME={{ zk_app_dir }}
+      export PATH=${ZOOKEEPER_HOME}/bin:${PATH}
+    marker: "# {mark} ANSIBLE ZOOKEEPER BLOCK"
+  become: yes
+  become_user: "{{ uname }}"
+
+- name: Start the Zookeeper service
+  shell: "source /etc/profile && {{ zk_app_dir }}/bin/zkServer.sh start"
+  args:
+    executable: /bin/bash
+  become: yes
+  become_user: "{{ uname }}"
+
+- name: Verify Zookeeper service status
+  shell: "source /etc/profile && {{ zk_app_dir }}/bin/zkServer.sh status"
+  register: zk_status_output
+  args:
+    executable: /bin/bash
+  become: yes
+  become_user: "{{ uname }}"
+
+- name: Print out Zookeeper service status
+  debug:
+    var: zk_status_output.stdout_lines
+

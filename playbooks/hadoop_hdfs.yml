@@ -1,0 +1,41 @@
+---
+- name: "Playbook running Ansible version {{ ansible_version.string }}"
+  hosts: "{{ target_hosts | default('all') }}"
+  remote_user: root
+  gather_facts: yes
+
+  vars_files:
+    - ../secrets/secrets_stage.yml
+
+  vars:
+    uname: 'hadoop'
+    gname: 'hadoop'
+    uid: '1000'
+    gid: '1000'
+    home_dir: '/home/hadoop'
+    password: "{{ hadoop_password }}"
+
+  roles:
+    # Setup OS Basic Configuration
+    - { role: os_basic_setup, when: (ansible_os_family == "Debian") and (ansible_lsb.major_release == "11") }
+
+    # Create Hadoop User and Group
+    - { role: create_user_group, when: (ansible_os_family == "Debian") and (ansible_lsb.major_release == "11") }
+
+    # Setup SSH Key-Based Authentication as Hadoop User
+    - role: setup_ssh_keys
+      become: yes
+      become_user: "{{ uname }}"
+      when: (ansible_os_family == "Debian") and (ansible_lsb.major_release == "11")
+
+    # Install Precompiled Binary OpenJDK
+    - { role: install_java, when: (ansible_os_family == "Debian") and (ansible_lsb.major_release == "11") }
+
+    # Install Hadoop
+    - { role: install_hadoop, when: (ansible_os_family == "Debian") and (ansible_lsb.major_release == "11") }
+
+  tasks:
+    - name: Prompt information
+      debug:
+        msg: "All tasks of ansible roles have been completed ~"
+

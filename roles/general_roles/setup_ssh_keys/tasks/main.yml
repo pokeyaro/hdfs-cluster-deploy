@@ -1,0 +1,60 @@
+- name: Get current user
+  shell: whoami
+  register: current_user
+
+- name: Get user's home directory
+  shell: "getent passwd {{ current_user.stdout }} | awk -F: '{ print $6 }'"
+  register: user_home_dir
+
+- name: Set some path fact for non-root users
+  set_fact:
+    ssh_directory: "{{ user_home_dir.stdout }}/.ssh"
+    gen_keys_file: "{{ user_home_dir.stdout }}/.ssh/{{ rsa_filename }}"
+    pub_keys_file: "{{ user_home_dir.stdout }}/.ssh/{{ rsa_filename }}.pub"
+    authorized_keys_file: "{{ user_home_dir.stdout }}/.ssh/authorized_keys"
+
+- name: Generate new SSH key pair on remote server
+  shell: yes | ssh-keygen -t rsa -N "" -C "{{ hostvars[inventory_hostname]['alias'] }}" -f "{{ gen_keys_file }}"
+  register: ssh_keygen_output
+  changed_when: ssh_keygen_output.stdout != ''
+
+- name: Retrieve newly generated public key from remote server
+  fetch:
+    src: "{{ pub_keys_file }}"
+    dest: "/tmp/{{ rsa_filename }}-{{ inventory_hostname }}"
+    flat: yes
+
+- name: Concatenate all retrieved public keys on local machine
+  shell: "cat /tmp/{{ rsa_filename }}*"
+  delegate_to: localhost
+  run_once: true
+  register: public_key_output
+  become: yes
+  become_user: root
+
+- name: Check if authorized_keys file exists on remote server
+  stat:
+    path: "{{ authorized_keys_file }}"
+  register: file_stat
+
+- name: Create authorized_keys file on remote server if it doesn't exist
+  file:
+    path: "{{ authorized_keys_file }}"
+    state: touch
+    owner: "{{ uid }}"
+    group: "{{ gid }}"
+    mode: '0644'
+  when: file_stat.stat.exists == False
+
+- name: Add public keys to authorized_keys file on remote server
+  lineinfile:
+    path: "{{ authorized_keys_file }}"
+    line: "{{ public_key_output.stdout }}"
+
+- name: Remove temporary public key files on local machine
+  shell: rm -rf /tmp/{{ rsa_filename }}*
+  connection: local
+  run_once: true
+  become: yes
+  become_user: root
+

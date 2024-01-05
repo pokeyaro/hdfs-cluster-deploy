@@ -1,0 +1,62 @@
+- name: Copy the Aliyun mirror list to source list directory
+  copy:
+    src: aliyun-mirror.list
+    dest: /etc/apt/sources.list.d/
+    mode: '0644'
+
+- name: Clean the local apt repository and update the package lists from the repositories
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+#- name: Check if Vim is installed
+#  shell: command -v vim
+#  register: vim_installed
+#  ignore_errors: true
+#
+#- block:
+#  - name: Install Vim
+#    apt:
+#      name: vim
+#      state: present
+#  - name: Ensure the old 'vi' executable is removed
+#    file:
+#      path: /usr/bin/vi
+#      state: absent
+#  - name: Create a symbolic link between Vim and Vi
+#    file:
+#      src: /usr/bin/vim
+#      dest: /usr/bin/vi
+#      state: link
+#  when: vim_installed.rc != 0
+
+- name: Set system hostname
+  hostname:
+    name: "{{ hostname }}"
+
+- name: Copy user profiles files to /etc/skel for new user default setup
+  copy:
+    src: "{{ item }}"
+    dest: "/etc/skel/{{ item }}"
+    mode: '0644'
+  loop:
+    - .bashrc
+    - .profile
+    - .vimrc
+
+- name: Overwrite /etc/hosts file with customized one
+  copy:
+    src: hosts
+    dest: /etc/hosts
+    force: yes
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Add defined hosts to /etc/hosts file
+  lineinfile:
+    state: present
+    path: /etc/hosts
+    line: "{{ hostvars[item]['inventory_hostname'] }}\t{{ hostvars[item]['hostname'] }}\t{{ hostvars[item]['alias'] }}"
+  loop: "{{ groups[target_hosts] }}"
+

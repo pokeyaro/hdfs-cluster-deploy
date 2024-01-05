@@ -1,0 +1,38 @@
+---
+- name: "Playbook running Ansible version {{ ansible_version.string }}"
+  hosts: "{{ target_hosts | default('all') }}"
+  remote_user: root
+  gather_facts: yes
+
+  vars_files:
+    - "{{ vault_file }}"
+
+  vars:
+    uname: 'zookeeper'
+    gname: 'zookeeper'
+    uid: '1000'
+    gid: '1000'
+    home_dir: '/home/zookeeper'
+    password: "{{ zk_password }}"
+
+  roles:
+    # Setup OS Basic Configuration
+    - { role: os_basic_setup, when: (ansible_os_family == "Debian") and (ansible_lsb.major_release == "11") }
+
+    # Setup SSH Key-Based Authentication
+    - { role: setup_ssh_keys, when: (ansible_os_family == "Debian") and (ansible_lsb.major_release == "11") }
+
+    # Create Zookeeper User and Group
+    - { role: create_user_group, when: (ansible_os_family == "Debian") and (ansible_lsb.major_release == "11") }
+
+    # Install Precompiled Binary OpenJDK
+    - { role: install_java, when: (ansible_os_family == "Debian") and (ansible_lsb.major_release == "11") }
+
+    # Install Zookeeper
+    - { role: install_zk, when: (ansible_os_family == "Debian") and (ansible_lsb.major_release == "11") }
+
+  tasks:
+    - name: Prompt information
+      debug:
+        msg: "All tasks of ansible roles have been completed ~"
+

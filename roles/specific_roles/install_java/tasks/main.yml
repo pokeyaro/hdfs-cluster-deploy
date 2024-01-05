@@ -1,0 +1,45 @@
+- name: Retrieve filename from the OpenJDK URL
+  set_fact:
+    tarball_filename: "{{ tarball_url.split('/')[-1] }}"
+
+- name: Download OpenJDK tarball from specified URL
+  get_url:
+    url: "{{ tarball_url }}"
+    dest: "/tmp/{{ tarball_filename }}"
+    timeout: 300
+
+- name: Extract the directory name from the downloaded OpenJDK tarball
+  shell: tar -tf /tmp/{{ tarball_filename }} | head -1 | awk -F '/' '{print $1}'
+  register: java_native_version
+  changed_when: false
+
+- name: Create directory for OpenJDK installation
+  file:
+    path: "{{ base_dir }}"
+    state: directory
+
+- name: Uncompress the OpenJDK tarball to the desired directory
+  unarchive:
+    src: "/tmp/{{ tarball_filename }}"
+    dest: "{{ base_dir }}"
+    remote_src: yes
+
+- name: Delete downloaded OpenJDK tarball 
+  file:
+    path: "/tmp/{{ tarball_filename }}"
+    state: absent
+
+- name: Add JAVA environment variables to /etc/profile 
+  lineinfile:
+    path: /etc/profile
+    line: "{{ item }}"
+  with_items:
+    - ' '
+    - '# BEGIN ANSIBLE JAVA BLOCK'
+    - 'export JAVA_HOME={{ base_dir }}/{{ java_native_version.stdout }}'
+    - 'export JRE_HOME=${JAVA_HOME}/jre'
+    - 'export CLASSPATH=.:${JAVA_HOME}/lib:${JRE_HOME}/lib'
+    - 'export PATH=${JAVA_HOME}/bin:${PATH}'
+    - '# END ANSIBLE JAVA BLOCK'
+    - ' '
+

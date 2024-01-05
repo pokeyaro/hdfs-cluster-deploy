@@ -1,0 +1,4 @@
+base_dir: "/opt/zk"
+tarball_url: "https://archive.apache.org/dist/zookeeper/zookeeper-3.9.1/apache-zookeeper-3.9.1-bin.tar.gz"
+zk_data_dir: ""
+zk_data_log_dir: ""

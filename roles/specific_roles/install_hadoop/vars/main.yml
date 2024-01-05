@@ -1,0 +1,2 @@
+base_dir: "/opt/hadoop"
+tarball_file: "hadoop-3.3.6.tar.gz"

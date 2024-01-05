@@ -1,0 +1,39 @@
+- name: Ensure mkpasswd utility is installed on localhost
+  delegate_to: localhost
+  apt:
+    name: whois
+    state: present
+
+- name: Generate SHA-512 password hash for the new user
+  delegate_to: localhost
+  command: >
+    mkpasswd -m sha-512 "{{ password }}"
+  register: password_hash_output
+  check_mode: no
+  changed_when: false
+
+- name: Create a new group for the user
+  group:
+    name: "{{ gname }}"
+    gid: "{{ gid }}"
+    state: present
+
+- name: Create a new group for the user
+  user:
+    name: "{{ uname }}"
+    uid: "{{ uid }}"
+    group: "{{ gname }}"
+    home: "{{ home_dir }}"
+    comment: "{{ uname | capitalize }} Service User"
+    shell: /bin/bash
+    password: "{{ password_hash_output.stdout }}"
+    create_home: yes
+
+- name: Ensure the Ansible temp directory for the user exists
+  file:
+    path: "{{ home_dir }}/.ansible/tmp"
+    state: directory
+    owner: "{{ uid }}"
+    group: "{{ gid }}"
+    mode: '0700'
+

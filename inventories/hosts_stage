@@ -1,0 +1,26 @@
+[hdfs:children]
+namenode
+datanode
+
+[namenode:children]
+nn_master
+nn_standby
+
+[nn_master]
+10.2.102.208 hostname=namenode01 alias=hdfs-master
+
+[nn_standby]
+10.2.102.209 hostname=namenode02 alias=hdfs-slave1
+10.2.102.210 hostname=namenode03 alias=hdfs-slave2
+
+[datanode]
+10.2.102.211 hostname=datanade01 alias=hdfs-data1
+10.2.102.212 hostname=datanode02 alias=hdfs-data2
+10.2.102.213 hostname=datanode03 alias=hdfs-data3
+10.2.102.214 hostname=datanode04 alias=hdfs-data4
+10.2.102.215 hostname=datanode05 alias=hdfs-data5
+
+[zookeeper]
+10.2.102.205 hostname=zookeeper01 alias=zk-node1
+10.2.102.206 hostname=zookeeper02 alias=zk-node2
+10.2.102.207 hostname=zookeeper03 alias=zk-node3

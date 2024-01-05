@@ -1,0 +1,11 @@
+# This is the inventory file for an Ansible playbook.
+#
+# ATTENTION: This playbook requires two custom attributes, 'hostname' and 'alias', being set for each host.
+# These attributes are used across various roles within tasks, templates, and so on. Without them, the playbook will fail.
+# 'hostname' should be the intended hostname for the node, and 'alias' should be a resolvable alias for the node. 
+# Please make sure they are correctly set for each host as shown in the examples below.
+# 
+# [app]
+# 192.168.0.1 hostname=server01 alias=master
+# 192.168.0.2 hostname=server02 alias=slave
+#

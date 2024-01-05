@@ -1,0 +1,117 @@
+- name: Set temporary file path for Hadoop tarball
+  set_fact:
+    temp_file: "/tmp/{{ tarball_file }}"
+
+- name: Copy Hadoop tarball from local to the target
+  copy:
+    src: "{{ tarball_file }}"
+    dest: "{{ temp_file }}"
+    owner: "{{ uid }}"
+    group: "{{ gid }}"
+    mode: '0644'
+
+- name: Extract directory name from downloaded tarball
+  shell: tar -tf {{ temp_file }} | head -1 | awk -F '/' '{print $1}'
+  register: hadoop_native_version
+  changed_when: false
+
+- name: Set facts for Hadoop directories and config file
+  set_fact:
+    hadoop_app_dir: "{{ base_dir }}/{{ hadoop_native_version.stdout }}"
+    hadoop_conf_dir: "{{ base_dir }}/{{ hadoop_native_version.stdout }}/etc/hadoop"
+    hadoop_data_dir: "{{ base_dir }}/{{ hadoop_native_version.stdout }}/data"
+    hadoop_logs_dir: "{{ base_dir }}/{{ hadoop_native_version.stdout }}/logs"
+
+- name: Get the JAVA_HOME environment variable
+  shell: source /etc/profile && echo "$JAVA_HOME"
+  args:
+    executable: /bin/bash
+  register: java_home_result
+
+- name: Set the fact for java_dir
+  set_fact:
+    java_dir: "{{ java_home_result.stdout_lines[0] }}"
+
+- name: Get the alias of the namenode
+  set_fact:
+    hdfs_namenode_hostname: "{{ hostvars[groups['nn_master'][0]]['alias'] }}"
+
+- name: Create Hadoop base directory
+  file:
+    path: "{{ base_dir }}"
+    state: directory
+    owner: "{{ uid }}"
+    group: "{{ gid }}"
+    mode: '0755'
+
+- name: Uncompress Hadoop tarball to the base directory
+  unarchive:
+    src: "{{ temp_file }}"
+    dest: "{{ base_dir }}"
+    remote_src: yes
+  become: yes
+  become_user: "{{ uname }}"
+
+- name: Create Hadoop data and logs directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ uid }}"
+    group: "{{ gid }}"
+    mode: '0755'
+  loop:
+    - "{{ hadoop_data_dir }}"
+    - "{{ hadoop_logs_dir }}"
+
+- name: Generate Hadoop configuration and environment files from templates
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ hadoop_conf_dir }}/{{ item.dest }}"
+    owner: "{{ uid }}"
+    group: "{{ gid }}"
+    mode: '0644'
+  loop:
+    - { src: 'hadoop-env.sh.j2', dest: 'hadoop-env.sh' }
+    - { src: 'core-site.xml.j2', dest: 'core-site.xml' }
+    - { src: 'hdfs-site.xml.j2', dest: 'hdfs-site.xml' }
+
+- name: Overwrite the workers file with datanode aliases, this task will only run on namenode
+  template:
+    src: workers.j2
+    dest: "{{ hadoop_conf_dir }}/workers"
+    owner: "{{ uid }}"
+    group: "{{ gid }}"
+    mode: '0644'
+  when: "'namenode' in group_names"
+
+- name: Cleanup downloaded Hadoop tarball
+  file:
+    path: "{{ temp_file }}"
+    state: absent
+
+- name: Update ~/.bashrc to include HADOOP environment variables
+  blockinfile:
+    path: ~/.bashrc
+    block: |
+      export HADOOP_HOME={{ hadoop_app_dir }}
+      export PATH=${HADOOP_HOME}/bin:${HADOOP_HOME}/sbin:${PATH}
+    marker: "# {mark} ANSIBLE HADOOP BLOCK"
+  become: yes
+  become_user: "{{ uname }}"
+
+- name: Format the NameNode service
+  shell: source /etc/profile && {{ hadoop_app_dir }}/bin/hdfs namenode -format
+  args:
+    executable: /bin/bash
+  become: yes
+  become_user: "{{ uname }}"
+  when: "'nn_master' in group_names"
+
+- name: Start the HDFS system
+  shell: source /etc/profile && {{ hadoop_app_dir }}/sbin/start-dfs.sh
+  args:
+    executable: /bin/bash
+  become: yes
+  become_user: "{{ uname }}"
+  when: "'nn_master' in group_names"
+
